@@ -9,8 +9,16 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
     networks:
       - robot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
   frontend:
     build:
@@ -21,10 +29,18 @@ services:
     environment:
       - REACT_APP_API_URL=http://localhost:8000
       - REACT_APP_WS_URL=ws://localhost:8000/ws
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     networks:
       - robot-network
     depends_on:
       - backend
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
 
 networks:
   robot-network:
