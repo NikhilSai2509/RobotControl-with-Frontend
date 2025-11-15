@@ -2,11 +2,11 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import URDFLoader from "urdf-loader";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
+// import { STLLoader } from "three/examples/jsm/loaders/STLLoader"; we only have obj files for our robot
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
 
 const RobotLoader = ({ jointAngles }) => {
-  const url = "/urdf/kuka_iiwa/model.urdf";
+  const url = "/urdf/franka_panda/panda.urdf";
   const { scene } = useThree();
   const robotRef = useRef();
 
@@ -14,133 +14,126 @@ const RobotLoader = ({ jointAngles }) => {
     const manager = new THREE.LoadingManager();
     const loader = new URDFLoader(manager);
 
-    // Configure mesh loader for different file types
+    // CRITICAL: Configure package path resolution
+    loader.packages = {
+      'franka_panda': '/urdf/franka_panda'
+    };
+
+    let loadedMeshes = 0;
+    let failedMeshes = 0;
+
+
     loader.loadMeshCb = (path, manager, onComplete) => {
-      console.log('🔄 Loading mesh:', path);
+      console.log('📄 Loading mesh:', path);
       const extension = path.split('.').pop().toLowerCase();
       
-      if (extension === 'stl') {
-        const stlLoader = new STLLoader(manager);
-        stlLoader.load(
-          path,
-          (geometry) => {
-            console.log('✅ STL loaded:', path);
-            geometry.computeVertexNormals();
-            
-            const material = new THREE.MeshStandardMaterial({
-              color: 0xff6b00, // KUKA orange
-              metalness: 0.6,
-              roughness: 0.4
-            });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            onComplete(mesh);
-          },
-          undefined,
-          (error) => {
-            console.error('❌ STL load error:', path, error);
-            onComplete(null);
-          }
-        );
-      } else if (extension === 'obj') {
+      if (extension === 'obj') {
         const objLoader = new OBJLoader(manager);
         objLoader.load(
           path,
           (obj) => {
+            loadedMeshes++;
             console.log('✅ OBJ loaded:', path);
+            console.log('Loaded meshes :', loadedMeshes);
             
-            // Apply material to all meshes in the OBJ
+            // Validate and apply materials
+            let hasValidGeometry = false;
             obj.traverse((child) => {
               if (child.isMesh) {
-                child.material = new THREE.MeshStandardMaterial({
-                  color: 0xff6b00, // KUKA orange
-                  metalness: 0.6,
-                  roughness: 0.4
-                });
-                child.castShadow = true;
-                child.receiveShadow = true;
+                // Check if geometry is valid
+                if (child.geometry && child.geometry.attributes.position) {
+                  hasValidGeometry = true;
+                  
+                  // Compute normals if missing
+                  if (!child.geometry.attributes.normal) {
+                    child.geometry.computeVertexNormals();
+                  }
+                  
+                  // Apply material with enhanced settings for better visibility
+                  child.material = new THREE.MeshStandardMaterial({
+                    color: 0xeeeeee,        // Light gray/white
+                    metalness: 0.3,
+                    roughness: 0.6,
+                    side: THREE.DoubleSide, // Render both sides
+                    flatShading: false
+                  });
+                  
+                  child.castShadow = true;
+                  child.receiveShadow = true;
+                } else {
+                  console.warn('⚠️ Mesh child has invalid geometry:', child.name);
+                }
               }
             });
             
+            if (!hasValidGeometry) {
+              console.warn('⚠️ OBJ loaded but no valid geometry found:', path);
+            }
+            
             onComplete(obj);
           },
-          undefined,
+          (progress) => {
+            if (progress.loaded && progress.total) {
+              const percent = (progress.loaded / progress.total * 100).toFixed(0);
+              console.log(`   Progress: ${percent}%`);
+            }
+          },
           (error) => {
-            console.error('❌ OBJ load error:', path, error);
-            // Create placeholder
-            const geometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
-            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            onComplete(new THREE.Mesh(geometry, material));
+            failedMeshes++;
+            console.error('❌ OBJ load FAILED:', path);
+            console.error('   Error:', error.message || error);
+            console.error('Obj loading failed , numer of failed meashes : ',failedMeshes)
+            
+            // Create visible placeholder
+            const geometry = new THREE.CylinderGeometry(0.03, 0.03, 0.1, 16);
+            const material = new THREE.MeshStandardMaterial({ 
+              color: 0xff0000,
+              wireframe: true,
+              transparent: true,
+              opacity: 0.7
+            });
+            const placeholder = new THREE.Mesh(geometry, material);
+            onComplete(placeholder);
           }
         );
-      } else if (extension === 'dae') {
-        console.warn('⚠️ DAE not supported, using placeholder for:', path);
-        const geometry = new THREE.SphereGeometry(0.03, 16, 16);
-        const material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-        onComplete(new THREE.Mesh(geometry, material));
-      } else {
+      } 
+      else {
+        failedMeshes++;
         console.warn('⚠️ Unsupported format:', extension);
-        const geometry = new THREE.BoxGeometry(0.02, 0.02, 0.02);
-        const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const geometry = new THREE.BoxGeometry(0.03, 0.03, 0.03);
+        const material = new THREE.MeshStandardMaterial({ color: 0xffff00 });
         onComplete(new THREE.Mesh(geometry, material));
       }
     };
 
-    console.log('🔄 Loading KUKA URDF:', url);
+    console.log('🔄 Loading Panda robot URDF...');
 
     loader.load(
       url,
       (robot) => {
-        console.log('✅ URDF Robot loaded successfully!');
-        console.log('Robot object:', robot);
-        console.log('Robot joints:', Object.keys(robot.joints || {}));
+        console.log('✅ URDF Robot loaded!');
         
         robotRef.current = robot;
-
-        // Position robot
         robot.position.set(0, 0, 0);
-        robot.rotation.set(0, 0, 0);
+        robot.rotation.set(-Math.PI / 2, 0, 0);
         
-        // Calculate bounding box
-        const bbox = new THREE.Box3().setFromObject(robot);
-        const size = new THREE.Vector3();
-        bbox.getSize(size);
-        const center = new THREE.Vector3();
-        bbox.getCenter(center);
-        
-        console.log('📦 Robot bounding box:');
-        console.log('  Size:', size);
-        console.log('  Center:', center);
-        console.log('  Min:', bbox.min);
-        console.log('  Max:', bbox.max);
-        
-        // Count meshes
-        let meshCount = 0;
-        robot.traverse((child) => {
-          if (child.isMesh) {
-            meshCount++;
-            console.log(`  Mesh ${meshCount}:`, {
-              name: child.name,
-              visible: child.visible,
-              vertices: child.geometry?.attributes?.position?.count || 0
-            });
-          }
-        });
-        
-        console.log(`✅ Total meshes loaded: ${meshCount}`);
-        
-        if (meshCount === 0) {
-          console.error('⚠️ WARNING: No meshes found! Robot will be invisible!');
-        }
-        
-        // Add to scene
         scene.add(robot);
-        console.log('✅ Robot added to scene at position:', robot.position);
-      },
-      undefined,
-      (error) => {
-        console.error('❌ URDF load error:', error);
+        
+        // WAIT for meshes to finish loading before checking
+        setTimeout(() => {
+          let meshCount = 0;
+          robot.traverse((child) => {
+            if (child.isMesh) meshCount++;
+          });
+          
+          console.log(`📊 Final mesh count: ${meshCount}`);
+          
+          if (meshCount === 0) {
+            console.error('❌ No meshes in robot after loading!');
+          } else {
+            console.log(`✅ Robot fully loaded with ${meshCount} meshes`);
+          }
+        }, 1000); // Wait 1 second for async mesh loading
       }
     );
 
@@ -155,13 +148,13 @@ const RobotLoader = ({ jointAngles }) => {
   useFrame(() => {
     if (robotRef.current && robotRef.current.joints) {
       const jointNames = [
-        'lbr_iiwa_joint_1',
-        'lbr_iiwa_joint_2',
-        'lbr_iiwa_joint_3',
-        'lbr_iiwa_joint_4',
-        'lbr_iiwa_joint_5',
-        'lbr_iiwa_joint_6',
-        'lbr_iiwa_joint_7'
+        'panda_joint1',
+        'panda_joint2',
+        'panda_joint3',
+        'panda_joint4',
+        'panda_joint5',
+        'panda_joint6',
+        'panda_joint7'
       ];
 
       jointNames.forEach((name, index) => {

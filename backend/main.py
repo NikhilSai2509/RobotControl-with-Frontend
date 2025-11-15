@@ -15,14 +15,14 @@ class RobotController:
         self.physics_client = None
         self.robot_id = None
         self.controllable_joints = []
-        self.num_joints = 7  # KUKA iiwa has 7 joints
+        self.num_joints = 7  # Panda has 7 main joints (+ 2 gripper joints)
         self.joint_limits = []
         self.current_angles = []
         self.initialize_simulation()
     
     def initialize_simulation(self):
         """Initialize PyBullet simulation"""
-        print("\033[92m Initializing PyBullet simulation... \033[0m") #92 green , 91 red
+        print("\033[92m Initializing PyBullet simulation... \033[0m")
         
         # Using DIRECT mode for headless server
         self.physics_client = p.connect(p.DIRECT)
@@ -33,7 +33,7 @@ class RobotController:
         plane_id = p.loadURDF("plane.urdf")
         print(f"\033[92m Loaded ground plane (ID: {plane_id}) \033[0m")
         
-        # Load KUKA iiwa robot
+        # Load Franka Panda robot
         self.robot_id = self.create_robot_urdf()
         
         # Configure joints
@@ -43,22 +43,22 @@ class RobotController:
         self.current_angles = [0.0] * self.num_joints
         
         # Set initial joint positions
-        for i, joint_idx in enumerate(self.controllable_joints):
+        for i, joint_idx in enumerate(self.controllable_joints[:self.num_joints]):
             p.resetJointState(self.robot_id, joint_idx, 0.0)
-        print(f"\033[92m PyBullet simulation initialized with {self.num_joints} joints \033[0m")
+        print(f"\033[92m PyBullet simulation initialized with {self.num_joints} controllable joints \033[0m")
 
     
     def create_robot_urdf(self):
-        """Load KUKA iiwa robot URDF"""
+        """Load Franka Panda robot URDF"""
         try:
-            print(" Loading KUKA iiwa robot...")
+            print(" Loading Franka Panda robot...")
             robot = p.loadURDF(
-                "kuka_iiwa/model.urdf",
+                "franka_panda/panda.urdf",
                 [0, 0, 0],
                 useFixedBase=True,
                 flags=p.URDF_USE_SELF_COLLISION
             )
-            print(f"\033[92m Loaded KUKA iiwa robot (ID: {robot}) \033[0m")
+            print(f"\033[92m Loaded Franka Panda robot (ID: {robot}) \033[0m")
             
             # Get number of joints
             num_joints = p.getNumJoints(robot)
@@ -79,18 +79,17 @@ class RobotController:
                     p.JOINT_FIXED: "FIXED"
                 }
                 
-                print(f" Joint {i}: {joint_name:25s} Type: {type_names.get(joint_type, joint_type)}")
+                print(f" Joint {i}: {joint_name:30s} Type: {type_names.get(joint_type, joint_type)}")
             
             print()
             return robot
             
         except Exception as e:
-            print(f"\033[91m Error loading KUKA iiwa: {e}\033[0m")
-            print("This should not happen as KUKA is already built into PyBullet")
+            print(f"\033[91m Error loading Franka Panda: {e}\033[0m")
             raise
     
     def configure_robot_joints(self):
-        """Configure joints based on loaded KUKA iiwa robot"""
+        """Configure joints based on loaded Franka Panda robot"""
         if self.robot_id is None:
             return
         
@@ -107,25 +106,27 @@ class RobotController:
                 self.controllable_joints.append(i)
                 
                 # Get joint limits
-                lower_limit = joint_info[8]  # Lower limit
-                upper_limit = joint_info[9]  # Upper limit
+                lower_limit = joint_info[8]
+                upper_limit = joint_info[9]
                 
-                print(f"  ✓ Joint {i}: {joint_name:25s} Limits: [{np.degrees(lower_limit):.1f}°, {np.degrees(upper_limit):.1f}°]")
+                print(f"  ✓ Joint {i}: {joint_name:30s} Limits: [{np.degrees(lower_limit):7.1f}°, {np.degrees(upper_limit):7.1f}°]")
         
-        print(f"\033[92mFound {len(self.controllable_joints)} controllable joints\n\033[0m")
+        print(f"\033[92mFound {len(self.controllable_joints)} controllable joints\033[0m")
         
-        # Update num_joints to match real robot
-        self.num_joints = len(self.controllable_joints)
+        # Note: Panda has 7 arm joints + 2 gripper joints
+        # We'll control the first 7 (arm joints)
+        print(f"\033[92mControlling first {self.num_joints} joints (arm only, excluding gripper)\n\033[0m")
         
-        # KUKA iiwa joint limits (in radians)
+        # Franka Panda joint limits (in radians) - first 7 joints
+        # These are the actual limits from the real robot
         self.joint_limits = [
-            (-2.96706, 2.96706),   # Joint 1: ±170°
-            (-2.09440, 2.09440),   # Joint 2: ±120°
-            (-2.96706, 2.96706),   # Joint 3: ±170°
-            (-2.09440, 2.09440),   # Joint 4: ±120°
-            (-2.96706, 2.96706),   # Joint 5: ±170°
-            (-2.09440, 2.09440),   # Joint 6: ±120°
-            (-3.05433, 3.05433),   # Joint 7: ±175°
+            (-2.9671, 2.9671),   # panda_joint1: ±170°
+            (-1.8326, 1.8326),   # panda_joint2: ±105°
+            (-2.9671, 2.9671),   # panda_joint3: ±170°
+            (-3.1416, 0.0),      # panda_joint4: -180° to 0°
+            (-2.9671, 2.9671),   # panda_joint5: ±170°
+            (-0.0873, 3.8223),   # panda_joint6: -5° to 219°
+            (-2.9671, 2.9671),   # panda_joint7: ±170°
         ]
     
     def get_joint_states(self) -> List[float]:
@@ -134,7 +135,8 @@ class RobotController:
             return self.current_angles
         
         joint_states = []
-        for joint_idx in self.controllable_joints:
+        # Only get the first num_joints (exclude gripper)
+        for joint_idx in self.controllable_joints[:self.num_joints]:
             joint_info = p.getJointState(self.robot_id, joint_idx)
             joint_states.append(joint_info[0])  # Joint position in radians
         
@@ -164,7 +166,7 @@ class RobotController:
                 force=500,
                 maxVelocity=1.0
             )
-    ## Function for smooth movement
+    
     def smooth_move(self, target_angles: List[float], steps: int = 50):
         """Generate smooth interpolation between current and target angles"""
         start_angles = self.get_joint_states()
@@ -185,14 +187,24 @@ class RobotController:
         if self.robot_id is None or not self.controllable_joints:
             return {"position": [0, 0, 0], "orientation": [0, 0, 0, 1]}
         
-        # Get last controllable joint link (end effector)
-        last_link_idx = self.controllable_joints[-1]
-        link_state = p.getLinkState(self.robot_id, last_link_idx)
+        # Get the last arm joint (panda_joint7) or end effector link
+        # For Panda, we want link index 8 (panda_link8) which is the end effector frame
+        ee_link_idx = 7  # panda_joint7 is at index 6, so link 8 is at 7
         
-        return {
-            "position": list(link_state[0]),
-            "orientation": list(link_state[1])
-        }
+        try:
+            link_state = p.getLinkState(self.robot_id, ee_link_idx)
+            return {
+                "position": list(link_state[0]),
+                "orientation": list(link_state[1])
+            }
+        except:
+            # Fallback to last controllable joint
+            last_link_idx = self.controllable_joints[self.num_joints - 1]
+            link_state = p.getLinkState(self.robot_id, last_link_idx)
+            return {
+                "position": list(link_state[0]),
+                "orientation": list(link_state[1])
+            }
     
     def step_simulation(self):
         """Step the physics simulation"""
@@ -229,9 +241,9 @@ manager = ConnectionManager()
 @app.get("/")
 async def root():
     return {
-        "message": "6-Axis Robot Control API - KUKA iiwa",
+        "message": "Franka Panda Robot Control API",
         "status": "running",
-        "robot": "KUKA iiwa 7-axis",
+        "robot": "Franka Panda 7-DOF",
         "joints": robot.num_joints
     }
 
@@ -291,12 +303,13 @@ async def get_end_effector():
 async def get_robot_info():
     """Get robot configuration info"""
     return {
-        "name": "KUKA iiwa",
+        "name": "Franka Panda",
         "num_joints": robot.num_joints,
-        "controllable_joints": robot.controllable_joints,
+        "controllable_joints": robot.controllable_joints[:robot.num_joints],
         "joint_limits_degrees": [
             {
-                "joint": i,
+                "joint": i + 1,  # 1-indexed for display
+                "name": f"panda_joint{i+1}",
                 "min": np.degrees(limit[0]),
                 "max": np.degrees(limit[1])
             }
@@ -311,7 +324,7 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         await manager.connect(websocket)
-        print(f"\033[92m ✓ WebSocket connected successfully!!!! \033[0m")
+        print(f"\033[92m ✓ WebSocket connected successfully! \033[0m")
         
         # Send initial state immediately
         initial_state = {
@@ -320,7 +333,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "end_effector": robot.get_end_effector_pose()
         }
         await websocket.send_json(initial_state)
-        print(f" Sent INITIAL state")
+        print(f" Sent initial state")
         
         while True:
             # Wait for messages from client
@@ -328,7 +341,7 @@ async def websocket_endpoint(websocket: WebSocket):
             print(f" Received from client: {data['type']}")
             
             if data["type"] == "move":
-                print(f"\033[92m Moving KUKA iiwa to: {data['angles']} \033[0m")
+                print(f"\033[92m Moving Panda to: {data['angles']} \033[0m")
                 angles_rad = [np.radians(a) for a in data["angles"]]
                 trajectory = robot.smooth_move(angles_rad, steps=30)
                 
@@ -359,7 +372,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print("\033[91m WebSocket disconnected\033[0m")
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"\033[91m WebSocket error{e}\033[0m")
+        print(f"\033[91m WebSocket error: {e}\033[0m")
         import traceback
         traceback.print_exc()
         try:
