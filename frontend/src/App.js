@@ -171,8 +171,8 @@ function App() {
       </div>
 
       {/* Control Panel */}
-      <div style={{ width: '384px', backgroundColor: '#1f2937', padding: '1.5rem', overflowY: 'auto' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
+      <div style={{ width: '384px', backgroundColor: '#1f2937', padding: '1rem', overflowY: 'auto' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>
           Control Panel
         </h2>
         

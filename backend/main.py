@@ -1,25 +1,14 @@
 # backend/main.py
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pybullet as p
 import pybullet_data
 import numpy as np
 import asyncio
-import json
 from typing import List, Dict
-import time
 
 app = FastAPI()
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 class RobotController:
     def __init__(self):
@@ -33,16 +22,16 @@ class RobotController:
     
     def initialize_simulation(self):
         """Initialize PyBullet simulation"""
-        print("🚀 Initializing PyBullet simulation...")
+        print("\033[92m Initializing PyBullet simulation... \033[0m") #92 green , 91 red
         
-        # Use DIRECT mode for headless server
+        # Using DIRECT mode for headless server
         self.physics_client = p.connect(p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.81)
         
         # Load plane
         plane_id = p.loadURDF("plane.urdf")
-        print(f"✅ Loaded ground plane (ID: {plane_id})")
+        print(f"\033[92m Loaded ground plane (ID: {plane_id}) \033[0m")
         
         # Load KUKA iiwa robot
         self.robot_id = self.create_robot_urdf()
@@ -56,28 +45,27 @@ class RobotController:
         # Set initial joint positions
         for i, joint_idx in enumerate(self.controllable_joints):
             p.resetJointState(self.robot_id, joint_idx, 0.0)
-        
-        print(f"✅ PyBullet simulation initialized with {self.num_joints} joints")
+        print(f"\033[92m PyBullet simulation initialized with {self.num_joints} joints \033[0m")
+
     
     def create_robot_urdf(self):
         """Load KUKA iiwa robot URDF"""
         try:
-            print("📦 Loading KUKA iiwa robot...")
+            print(" Loading KUKA iiwa robot...")
             robot = p.loadURDF(
                 "kuka_iiwa/model.urdf",
                 [0, 0, 0],
                 useFixedBase=True,
                 flags=p.URDF_USE_SELF_COLLISION
             )
-            
-            print(f"✅ Loaded KUKA iiwa robot (ID: {robot})")
+            print(f"\033[92m Loaded KUKA iiwa robot (ID: {robot}) \033[0m")
             
             # Get number of joints
             num_joints = p.getNumJoints(robot)
-            print(f"📊 Robot has {num_joints} total joints/links")
+            print(f" Robot has {num_joints} total joints/links")
             
             # Print all joint info
-            print("\n🔧 Joint Information:")
+            print("\n Joint Information:")
             for i in range(num_joints):
                 joint_info = p.getJointInfo(robot, i)
                 joint_name = joint_info[1].decode('utf-8')
@@ -91,14 +79,14 @@ class RobotController:
                     p.JOINT_FIXED: "FIXED"
                 }
                 
-                print(f"  Joint {i}: {joint_name:25s} Type: {type_names.get(joint_type, joint_type)}")
+                print(f" Joint {i}: {joint_name:25s} Type: {type_names.get(joint_type, joint_type)}")
             
             print()
             return robot
             
         except Exception as e:
-            print(f"❌ Error loading KUKA iiwa: {e}")
-            print("This should not happen as KUKA is built into PyBullet")
+            print(f"\033[91m Error loading KUKA iiwa: {e}\033[0m")
+            print("This should not happen as KUKA is already built into PyBullet")
             raise
     
     def configure_robot_joints(self):
@@ -108,8 +96,7 @@ class RobotController:
         
         # Get controllable joints (revolute/prismatic)
         self.controllable_joints = []
-        
-        print("🎮 Configuring controllable joints:")
+        print(f"\033[92m Configuring controllable joints:\033[0m")
         for i in range(p.getNumJoints(self.robot_id)):
             joint_info = p.getJointInfo(self.robot_id, i)
             joint_type = joint_info[2]
@@ -125,7 +112,7 @@ class RobotController:
                 
                 print(f"  ✓ Joint {i}: {joint_name:25s} Limits: [{np.degrees(lower_limit):.1f}°, {np.degrees(upper_limit):.1f}°]")
         
-        print(f"\n✅ Found {len(self.controllable_joints)} controllable joints\n")
+        print(f"\033[92mFound {len(self.controllable_joints)} controllable joints\n\033[0m")
         
         # Update num_joints to match real robot
         self.num_joints = len(self.controllable_joints)
@@ -177,7 +164,7 @@ class RobotController:
                 force=500,
                 maxVelocity=1.0
             )
-    
+    ## Function for smooth movement
     def smooth_move(self, target_angles: List[float], steps: int = 50):
         """Generate smooth interpolation between current and target angles"""
         start_angles = self.get_joint_states()
@@ -320,11 +307,11 @@ async def get_robot_info():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time updates"""
-    print("🔌 WebSocket connection attempt...")
+    print(f"\033[92m WebSocket connection attempt... \033[0m")
     
     try:
         await manager.connect(websocket)
-        print("✅ WebSocket connected successfully!")
+        print(f"\033[92m ✓ WebSocket connected successfully!!!! \033[0m")
         
         # Send initial state immediately
         initial_state = {
@@ -333,15 +320,15 @@ async def websocket_endpoint(websocket: WebSocket):
             "end_effector": robot.get_end_effector_pose()
         }
         await websocket.send_json(initial_state)
-        print(f"📤 Sent initial state")
+        print(f" Sent INITIAL state")
         
         while True:
             # Wait for messages from client
             data = await websocket.receive_json()
-            print(f"📥 Received from client: {data['type']}")
+            print(f" Received from client: {data['type']}")
             
             if data["type"] == "move":
-                print(f"🤖 Moving KUKA iiwa to: {data['angles']}")
+                print(f"\033[92m Moving KUKA iiwa to: {data['angles']} \033[0m")
                 angles_rad = [np.radians(a) for a in data["angles"]]
                 trajectory = robot.smooth_move(angles_rad, steps=30)
                 
@@ -357,7 +344,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json(state)
                     await asyncio.sleep(0.033)  # ~30 fps
                 
-                print("✅ Movement complete")
+                print(f"\033[92m Movement complete\033[0m")
             
             elif data["type"] == "get_state":
                 state = {
@@ -366,13 +353,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     "end_effector": robot.get_end_effector_pose()
                 }
                 await websocket.send_json(state)
-                print(f"📤 Sent current state")
+                print(f" Sent current state")
                 
     except WebSocketDisconnect:
-        print("❌ WebSocket disconnected")
+        print("\033[91m WebSocket disconnected\033[0m")
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"❌ WebSocket error: {e}")
+        print(f"\033[91m WebSocket error{e}\033[0m")
         import traceback
         traceback.print_exc()
         try:
