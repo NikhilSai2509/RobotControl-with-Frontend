@@ -100,7 +100,7 @@ const RobotLoader = ({ jointAngles }) => {
 
         // Position robot
         robot.position.set(0, 0, 0);
-        robot.rotation.set(0, 0, 0);
+        robot.rotation.set(-1.57, 0, 0);
         
         // Calculate bounding box
         const bbox = new THREE.Box3().setFromObject(robot);
