@@ -13,7 +13,7 @@ function Loader() {
   );
 }
 
-export default function Scene({ jointAngles }) {
+export default function Scene({ jointAngles, boxes = [] }) {
   return (
     <>
       <OrbitControls 
@@ -42,6 +42,18 @@ export default function Scene({ jointAngles }) {
         <circleGeometry args={[5, 64]} />
         <meshStandardMaterial color="#1f2937" roughness={0.8} metalness={0.2} />
       </mesh>
+
+      {/* Boxes */}
+      {boxes.map((box) => (
+        <mesh key={box.id} position={box.position} castShadow receiveShadow>
+          <boxGeometry args={box.size} />
+          <meshStandardMaterial 
+            color={[box.color[0], box.color[1], box.color[2]]}
+            metalness={0.5}
+            roughness={0.5}
+          />
+        </mesh>
+      ))}
       
       <Suspense fallback={<Loader />}>
         <RobotLoader jointAngles={jointAngles} />

@@ -39,6 +39,7 @@ function App() {
   const [isMoving, setIsMoving] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Connecting...');
+  const [boxes, setBoxes] = useState([]);
 
   const jointLimits = [
     { min: -170, max: 170, name: "Joint 1 (Base)" },
@@ -155,6 +156,52 @@ function App() {
     }
   };
 
+  const addBox = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/create_box', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        console.log('Box created:', data.box_id);
+        const newBox = {
+          id: data.box_id,
+          position: data.position,
+          size: data.size,
+          color: data.color
+        };
+        setBoxes([...boxes, newBox]);
+        setStatusMessage(`Box created (ID: ${data.box_id})`);
+      }
+    } catch (error) {
+      console.error('Error creating box:', error);
+      setStatusMessage('Error creating box');
+    }
+  };
+
+  const resetScene = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/reset_scene', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await response.json();
+      if (data.success) {
+        console.log('Scene reset');
+        setBoxes([]);
+        setStatusMessage('Scene cleared');
+      }
+    } catch (error) {
+      console.error('Error resetting scene:', error);
+      setStatusMessage('Error resetting scene');
+    }
+  };
+
   return (
     <>
       <style>{sliderStyles}</style>
@@ -166,7 +213,7 @@ function App() {
           shadows
           style={{ background: '#1a1a2e' }}
         >
-          <Scene jointAngles={jointAngles} />
+          <Scene jointAngles={jointAngles} boxes={boxes} />
         </Canvas>
         
         {/* Status Overlay */}
@@ -269,16 +316,51 @@ function App() {
             fontSize: '0.875rem'
           }}
         >
-          🔄 Reset
+          🔄 Reset Robot
         </button>
 
+        <button 
+          onClick={addBox}
+          style={{ 
+            width: '50%', 
+            backgroundColor: '#d97706', 
+            color: 'white', 
+            padding: '0.5rem', 
+            borderRadius: '0.5rem', 
+            border: 'none', 
+            marginTop: '0.5rem',
+            cursor: 'pointer', 
+            fontWeight: 600,
+            fontSize: '0.875rem'
+          }}
+        >
+          📦 Add Box
+        </button>
+
+        <button 
+          onClick={resetScene}
+          style={{ 
+            width: '50%', 
+            backgroundColor: '#dc2626', 
+            color: 'white', 
+            padding: '0.5rem', 
+            borderRadius: '0.5rem', 
+            border: 'none', 
+            marginTop: '0.5rem',
+            cursor: 'pointer', 
+            fontWeight: 600,
+            fontSize: '0.875rem'
+          }}
+        >
+          🗑️ Reset Scene
+        </button>
         <div style={{ marginTop: '1.5rem' }}>
           <h3 style={{ fontWeight: 600, marginBottom: '0.75rem' }}>Quick Positions</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
             <button onClick={() => setTargetAngles([0, 45, 0, -45, 0, 45, 0])} disabled={isMoving} style={{ backgroundColor: '#374151', padding: '0.5rem', borderRadius: '0.25rem', border: 'none', color: 'white', fontSize: '0.875rem', cursor: 'pointer' }}>Pos 1</button>
             <button onClick={() => setTargetAngles([90, -30, 45, 60, -45, -30, 90])} disabled={isMoving} style={{ backgroundColor: '#374151', padding: '0.5rem', borderRadius: '0.25rem', border: 'none', color: 'white', fontSize: '0.875rem', cursor: 'pointer' }}>Pos 2</button>
             <button onClick={() => setTargetAngles([-90, 60, -30, -90, 90, 60, -90])} disabled={isMoving} style={{ backgroundColor: '#374151', padding: '0.5rem', borderRadius: '0.25rem', border: 'none', color: 'white', fontSize: '0.875rem', cursor: 'pointer' }}>Pos 3</button>
-            <button onClick={() => setTargetAngles([0, 90, 0, -90, 0, 90, 0])} disabled={isMoving} style={{ backgroundColor: '#374151', padding: '0.5rem', borderRadius: '0.25rem', border: 'none', color: 'white', fontSize: '0.875rem', cursor: 'pointer' }}>Home Up</button>
+            <button onClick={() => setTargetAngles([0, 60, 0, -90, 0, 90, 0])} disabled={isMoving} style={{ backgroundColor: '#374151', padding: '0.5rem', borderRadius: '0.25rem', border: 'none', color: 'white', fontSize: '0.875rem', cursor: 'pointer' }}>Home Up</button>
           </div>
         </div>
       </div>
@@ -286,5 +368,4 @@ function App() {
     </>
   );
 }
-
 export default App;
