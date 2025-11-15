@@ -2,6 +2,35 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import Scene from './components/Scene';
 
+// Minimal slider styling
+const sliderStyles = `
+  .styled-slider {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #4b5563;
+    outline: none;
+  }
+  .styled-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    cursor: pointer;
+    background: #4b5563;
+    border-radius: 3px;
+  }
+  .styled-slider::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    cursor: pointer;
+    background: #4b5563;
+    border-radius: 3px;
+    border: none;
+  }
+`;
+
 function App() {
   const wsRef = useRef(null);
 
@@ -127,7 +156,9 @@ function App() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', backgroundColor: '#111827', color: 'white' }}>
+    <>
+      <style>{sliderStyles}</style>
+      <div style={{ display: 'flex', height: '100vh', backgroundColor: '#111827', color: 'white' }}>
       {/* 3D Canvas */}
       <div style={{ flex: 1, position: 'relative' }}>
         <Canvas
@@ -191,7 +222,7 @@ function App() {
               step="1"
               value={targetAngles[index]}
               onChange={(e) => handleJointChange(index, e.target.value)}
-              style={{ width: '100%' }}
+              className="styled-slider"
               disabled={isMoving}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem' }}>
@@ -251,7 +282,8 @@ function App() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
